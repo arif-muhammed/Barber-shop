@@ -1,0 +1,250 @@
+﻿@{
+    Layout = "~/Views/Shared/_Layout.cshtml";
+}
+@model Hairdresser_Website.Models.Appointment
+
+@if (TempData["Error"] != null)
+{
+    <div class="alert alert-danger">
+        @TempData["Error"]
+    </div>
+}
+
+<div class="d-flex justify-content-center align-items-center vh-100" style="background: linear-gradient(to right, #8360c3, #2ebf91);">
+    <div class="card shadow-lg border-0" style="width: 100%; max-width: 900px; border-radius: 20px; overflow: hidden;">
+        <div class="card-header text-white text-center" style="background: #2ebf91;">
+            <h3 class="mb-0">Book an Appointment</h3>
+        </div>
+        <div class="card-body p-5">
+            <form asp-controller="Appointment" asp-action="Create" method="post">
+                <div asp-validation-summary="ModelOnly" class="alert alert-danger" role="alert"></div>
+
+                <div class="row mb-4">
+                    <div class="col-md-4">
+                        <label asp-for="Service.Salon.SalonId" class="form-label">Salon</label>
+                        <select asp-for="Service.Salon.SalonId" class="form-select shadow" asp-items="ViewBag.Salons" id="salonId">
+                            <option value="">-- Select Salon --</option>
+                        </select>
+                        <span asp-validation-for="Service.Salon.SalonId" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label asp-for="ServiceId" class="form-label">Service</label>
+                        <select asp-for="ServiceId" class="form-select shadow" id="serviceId">
+                            <option value="">-- Select Service --</option>
+                        </select>
+                        <span asp-validation-for="ServiceId" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-4">
+                        <label asp-for="EmployeeId" class="form-label">Employee</label>
+                        <select asp-for="EmployeeId" class="form-select shadow" id="employeeId">
+                            <option value="">-- Select Employee --</option>
+                        </select>
+                        <span asp-validation-for="EmployeeId" class="text-danger"></span>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <div class="card border-0 shadow text-center py-3">
+                            <h5 class="text-muted">Price</h5>
+                            <p id="servicePrice" class="h4 text-primary">--</p>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card border-0 shadow text-center py-3">
+                            <h5 class="text-muted">Duration</h5>
+                            <p id="serviceDuration" class="h4 text-primary">--</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="row mb-4">
+                    <div class="col-md-6">
+                        <label asp-for="AppointmentDate" class="form-label">Date</label>
+                        <input asp-for="AppointmentDate" type="date" class="form-control shadow" id="appointmentDate" />
+                        <span asp-validation-for="AppointmentDate" class="text-danger"></span>
+                    </div>
+
+                    <div class="col-md-6">
+                        <label for="appointmentTime" class="form-label">Time</label>
+                        <select id="appointmentTime" name="appointmentTime" class="form-select shadow" disabled>
+                            <option value="">-- Select Date First --</option>
+                        </select>
+                    </div>
+                </div>
+
+                <input asp-for="AppointmentDate" type="hidden" id="completeAppointmentDateTime" />
+
+                <div class="d-flex justify-content-center gap-3 mt-4">
+                    <button type="submit" class="btn btn-lg text-white" style="background: #8360c3; border: none; border-radius: 30px; padding: 10px 30px;">
+                        Book Appointment
+                    </button>
+                    <a asp-controller="Home" asp-action="Index" class="btn btn-lg text-white" style="background: #2ebf91; border: none; border-radius: 30px; padding: 10px 30px;">
+                        Cancel
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+@section Scripts {
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const salonSelect = document.getElementById('salonId');
+            const serviceSelect = document.getElementById('serviceId');
+            const employeeSelect = document.getElementById('employeeId');
+            const servicePriceElement = document.getElementById('servicePrice');
+            const serviceDurationElement = document.getElementById('serviceDuration');
+            const dateInput = document.getElementById('appointmentDate');
+            const timeSelect = document.getElementById('appointmentTime');
+
+            let servicesData = [];
+
+            function formatPrice(price) {
+                return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(price);
+            }
+
+            function formatDuration(minutes) {
+                if (minutes < 60) {
+                    return `${minutes} minutes`;
+                }
+                const hours = Math.floor(minutes / 60);
+                const remainingMinutes = minutes % 60;
+                return `${hours} hour${hours > 1 ? 's' : ''}${remainingMinutes ? ` ${remainingMinutes} minutes` : ''}`;
+            }
+
+            function setDefaultOption(selectElement, text = '-- Select --') {
+                selectElement.innerHTML = '';
+                const defaultOption = document.createElement('option');
+                defaultOption.text = text;
+                defaultOption.value = '';
+                selectElement.add(defaultOption);
+            }
+
+            async function updateTimeSlots() {
+                const employeeId = employeeSelect.value;
+                const serviceId = serviceSelect.value;
+                const date = dateInput.value;
+
+                if (!employeeId || !serviceId || !date) {
+                    timeSelect.disabled = true;
+                    setDefaultOption(timeSelect, '-- Select all fields above --');
+                    return;
+                }
+
+                timeSelect.disabled = true;
+                timeSelect.innerHTML = '<option value="">Loading...</option>';
+
+                try {
+                    const response = await fetch(`/Appointment/GetAvailableTimeSlots?employeeId=${employeeId}&date=${date}&serviceId=${serviceId}`);
+                    if (!response.ok) throw new Error('Failed to fetch time slots');
+                    const timeSlots = await response.json();
+
+                    setDefaultOption(timeSelect, '-- Select Time --');
+                    timeSlots.forEach(slot => {
+                        const option = document.createElement('option');
+                        const timeString = new Date(`2000-01-01T${slot.time}`).toLocaleTimeString([], {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                        });
+                        option.value = slot.time;
+                        option.text = timeString;
+
+                        if (!slot.isAvailable) {
+                            option.disabled = true;
+                            option.classList.add('text-muted', 'bg-light');
+                        }
+
+                        timeSelect.add(option);
+                    });
+
+                    timeSelect.disabled = false;
+                } catch (error) {
+                    console.error('Error fetching time slots:', error);
+                    setDefaultOption(timeSelect, '-- Error loading time slots --');
+                }
+            }
+
+            salonSelect.addEventListener('change', async function () {
+                const salonId = this.value;
+                if (salonId) {
+                    try {
+                        const response = await fetch(`/Appointment/GetServicesBySalon?salonId=${salonId}`);
+                        if (!response.ok) throw new Error('Failed to fetch services');
+                        const data = await response.json();
+
+                        servicesData = data;
+                        setDefaultOption(serviceSelect, '-- Select Service --');
+                        data.forEach(service => {
+                            const option = document.createElement('option');
+                            option.text = `${service.name} (${formatPrice(service.price)} - ${formatDuration(service.duration)})`;
+                            option.value = service.serviceId;
+                            serviceSelect.add(option);
+                        });
+                        setDefaultOption(employeeSelect, '-- Select Employee --');
+                        servicePriceElement.textContent = '--';
+                        serviceDurationElement.textContent = '--';
+                    } catch (error) {
+                        console.error('Error fetching services:', error);
+                        setDefaultOption(serviceSelect, '-- No Services Available --');
+                    }
+                } else {
+                    setDefaultOption(serviceSelect, '-- Select Service --');
+                    setDefaultOption(employeeSelect, '-- Select Employee --');
+                    servicePriceElement.textContent = '--';
+                    serviceDurationElement.textContent = '--';
+                }
+            });
+
+            serviceSelect.addEventListener('change', async function () {
+                const selectedService = servicesData.find(s => s.serviceId == this.value);
+                if (selectedService) {
+                    servicePriceElement.textContent = formatPrice(selectedService.price);
+                    serviceDurationElement.textContent = formatDuration(selectedService.duration);
+                } else {
+                    servicePriceElement.textContent = '--';
+                    serviceDurationElement.textContent = '--';
+                }
+
+                const salonId = salonSelect.value;
+                if (this.value && salonId) {
+                    try {
+                        const response = await fetch(`/Appointment/GetEmployeesByServiceAndSalon?salonId=${salonId}&serviceId=${this.value}`);
+                        if (!response.ok) throw new Error('Failed to fetch employees');
+                        const data = await response.json();
+
+                        setDefaultOption(employeeSelect, '-- Select Employee --');
+                        data.forEach(employee => {
+                            const option = document.createElement('option');
+                            option.text = employee.name;
+                            option.value = employee.employeeId;
+                            employeeSelect.add(option);
+                        });
+                    } catch (error) {
+                        console.error('Error fetching employees:', error);
+                        setDefaultOption(employeeSelect, '-- No Employees Available --');
+                    }
+                } else {
+                    setDefaultOption(employeeSelect, '-- Select Employee --');
+                }
+
+                setDefaultOption(timeSelect, '-- Select Employee and Date First --');
+            });
+
+            if (dateInput) {
+                const today = new Date();
+                const maxDate = new Date();
+                maxDate.setMonth(maxDate.getMonth() + 3);
+
+                dateInput.min = today.toISOString().split('T')[0];
+                dateInput.max = maxDate.toISOString().split('T')[0];
+            }
+
+            employeeSelect.addEventListener('change', updateTimeSlots);
+            dateInput.addEventListener('change', updateTimeSlots);
+        });
+    </script>
+}
